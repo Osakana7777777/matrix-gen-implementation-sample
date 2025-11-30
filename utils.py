@@ -20,12 +20,14 @@ def save_to_jsonl(data, filename):
             f.write('\n')
     print(f"Data saved to {filename}")
 
-async def generate_completion(client, messages, model=None, retries=3):
+async def generate_completion(client, messages, model=None, retries=3, include_reasoning=None):
     if model is None:
         model = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
     
     # Check if reasoning should be included
-    include_reasoning = os.environ.get("INCLUDE_REASONING", "false").lower() == "true"
+    # Use parameter if provided, otherwise fall back to environment variable
+    if include_reasoning is None:
+        include_reasoning = os.environ.get("INCLUDE_REASONING", "false").lower() == "true"
     
     for attempt in range(retries):
         try:
@@ -39,8 +41,8 @@ async def generate_completion(client, messages, model=None, retries=3):
             content = message.content or ""
             
             # If reasoning is available and should be included, prepend it
-            if include_reasoning and hasattr(message, 'reasoning') and message.reasoning:
-                content = f"<think>{message.reasoning}</think>\n\n{content}"
+            if include_reasoning and hasattr(message, 'reasoning_content') and message.reasoning_content:
+                content = f"<think>\n{message.reasoning_content}\n</think>\n\n{content}"
             
             return content
         except RateLimitError:
