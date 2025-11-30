@@ -24,13 +24,25 @@ async def generate_completion(client, messages, model=None, retries=3):
     if model is None:
         model = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
     
+    # Check if reasoning should be included
+    include_reasoning = os.environ.get("INCLUDE_REASONING", "false").lower() == "true"
+    
     for attempt in range(retries):
         try:
             response = await client.chat.completions.create(
                 model=model,
                 messages=messages
             )
-            return response.choices[0].message.content
+            
+            # Get content and reasoning
+            message = response.choices[0].message
+            content = message.content or ""
+            
+            # If reasoning is available and should be included, prepend it
+            if include_reasoning and hasattr(message, 'reasoning') and message.reasoning:
+                content = f"<think>{message.reasoning}</think>\n\n{content}"
+            
+            return content
         except RateLimitError:
             if attempt < retries - 1:
                 wait_time = 2 ** attempt  # Exponential backoff
