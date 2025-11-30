@@ -1,0 +1,2 @@
+upload
+uv pip install huggingface-hub
