@@ -42,9 +42,9 @@ async def generate_completion(client, messages, model=None, retries=3, include_r
             
             # If reasoning is available and should be included, prepend it
             if include_reasoning and hasattr(message, 'reasoning_content') and message.reasoning_content:
-                content = f"<think>\n{message.reasoning_content}\n</think>\n\n{content}"
+                content = f"<think>\n{message.reasoning_content.strip()}\n</think>\n\n{content.strip()}"
             
-            return content
+            return content.strip()
         except RateLimitError:
             if attempt < retries - 1:
                 wait_time = 2 ** attempt  # Exponential backoff

@@ -8,3 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Custom ignore patterns
+extract_pdf*.py
+memo.txt
+
+# Mac
+.DS_Store
+
+
