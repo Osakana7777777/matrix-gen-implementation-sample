@@ -1,6 +1,7 @@
 import json
 import asyncio
 from utils import get_openai_client, save_to_jsonl, generate_completion
+from agent_groups_data import agent_groups
 
 # Define Agent Class
 class Agent:
@@ -107,43 +108,7 @@ class Modulator:
         pass
 
 
-# Define Scenarios with agent groups
-agent_groups = [
-    {
-        "group_id": "health_lifestyle",
-        "agents": [
-            {
-                "agent_id": "tanaka_misaki",
-                "profile": "名前: 田中みさき, 年齢: 35歳, 職業: 主婦, 性格: 料理好きで健康志向。新しいレシピに挑戦するのが好き。",
-                "goal": "家族のために健康的で美味しい夕食を作りたい。",
-                "plan": "冷蔵庫にある余り野菜（キャベツ、人参）を使った新しいレシピを探す。"
-            },
-            {
-                "agent_id": "yamada_kenji",
-                "profile": "名前: 山田健二, 年齢: 28歳, 職業: フィットネストレーナー, 性格: 健康志向で明るい。栄養学にも詳しい。",
-                "goal": "クライアントに健康的な食事のアドバイスをしたい。",
-                "plan": "簡単に作れる高タンパク低カロリーのレシピを集める。"
-            }
-        ]
-    },
-    {
-        "group_id": "tech_learning",
-        "agents": [
-            {
-                "agent_id": "sato_kenta",
-                "profile": "名前: 佐藤健太, 年齢: 22歳, 職業: 情報系大学生, 性格: 真面目だが少しせっかち。プログラミング初心者。",
-                "goal": "Pythonを使ってデータ分析ができるようになりたい。",
-                "plan": "まずはPandasライブラリの基本的な使い方をマスターする。"
-            },
-            {
-                "agent_id": "nakamura_yuki",
-                "profile": "名前: 中村ユキ, 年齢: 26歳, 職業: データサイエンティスト, 性格: 親切で教えることが好き。",
-                "goal": "データ分析の知識を広めたい。初心者を支援したい。",
-                "plan": "わかりやすいPandasチュートリアルを作成する。"
-            }
-        ]
-    }
-]
+
 
 
 async def process_group_scenario(client, group_config, max_turns=2):
