@@ -138,51 +138,68 @@ async def process_group_scenario(client, group_config, max_turns=2):
     message_index = 0  # Track message index for reasoning control
     
     # Run multi-turn interaction
+    # max_turns represents the number of conversation rounds (each round = user + assistant message)
     for turn in range(max_turns):
         print(f"\n--- Turn {turn + 1} ---")
         
-        # Each agent generates an action
-        for agent in agents:
-            # Get observations from modulator's memory (excluding own actions)
-            observations = [
-                entry["action"] for entry in modulator.structured_memory
-                if entry["agent_id"] != agent.agent_id
-            ][-3:]  # Last 3 observations
-            
-            # Generate action
-            # Only include reasoning for even-indexed messages (assistant messages)
-            # message_index: 0=user, 1=assistant, 2=user, 3=assistant, etc.
-            should_include_reasoning = (message_index % 2 == 1)  # 1, 3, 5, ...
-            
-            action = await agent.generate_action(
-                client,
-                observations=observations if observations else None,
-                include_reasoning=should_include_reasoning
-            )
-            
-            if not action:
-                continue
-            
-            print(f"{agent.agent_id}: {action[:50]}...")
-            
-            # Collect action in modulator
-            await modulator.collect_action(agent.agent_id, action)
-            
-            # Add to conversation history with agent_id as separate key
-            # Determine role based on message index
-            role = "user" if message_index % 2 == 0 else "assistant"
+        # Each turn generates 2 messages: one user and one assistant
+        # Select 2 agents for this turn (cycling through available agents)
+        user_agent = agents[(turn * 2) % len(agents)]
+        assistant_agent = agents[(turn * 2 + 1) % len(agents)]
+        
+        # Generate user message
+        observations = [
+            entry["action"] for entry in modulator.structured_memory
+            if entry["agent_id"] != user_agent.agent_id
+        ][-3:]  # Last 3 observations
+        
+        user_action = await user_agent.generate_action(
+            client,
+            observations=observations if observations else None,
+            include_reasoning=False  # User messages don't need reasoning
+        )
+        
+        if user_action:
+            print(f"{user_agent.agent_id} (user): {user_action[:50]}...")
+            await modulator.collect_action(user_agent.agent_id, user_action)
             
             conversation_history.append({
-                "role": role,
-                "content": action,
-                "agent_id": agent.agent_id
+                "role": "user",
+                "content": user_action,
+                "agent_id": user_agent.agent_id
             })
-            
-            message_index += 1
             
             # Determine which agents should receive this action
             relevant_agents = await modulator.distribute_to_relevant_agents(
-                client, action, agent.agent_id
+                client, user_action, user_agent.agent_id
+            )
+            print(f"  -> Relevant to: {relevant_agents}")
+        
+        # Generate assistant message
+        observations = [
+            entry["action"] for entry in modulator.structured_memory
+            if entry["agent_id"] != assistant_agent.agent_id
+        ][-3:]  # Last 3 observations
+        
+        assistant_action = await assistant_agent.generate_action(
+            client,
+            observations=observations if observations else None,
+            include_reasoning=True  # Assistant messages include reasoning
+        )
+        
+        if assistant_action:
+            print(f"{assistant_agent.agent_id} (assistant): {assistant_action[:50]}...")
+            await modulator.collect_action(assistant_agent.agent_id, assistant_action)
+            
+            conversation_history.append({
+                "role": "assistant",
+                "content": assistant_action,
+                "agent_id": assistant_agent.agent_id
+            })
+            
+            # Determine which agents should receive this action
+            relevant_agents = await modulator.distribute_to_relevant_agents(
+                client, assistant_action, assistant_agent.agent_id
             )
             print(f"  -> Relevant to: {relevant_agents}")
     
