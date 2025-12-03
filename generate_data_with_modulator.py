@@ -1,5 +1,6 @@
 import json
 import asyncio
+import random
 from utils import get_openai_client, save_to_jsonl, generate_completion
 from agent_groups_data import agent_groups
 
@@ -108,6 +109,39 @@ class Modulator:
         pass
 
 
+async def select_relevant_agent(client, modulator, agents, previous_speaker):
+    """
+    前の発言に対してrelevantなエージェントからランダムに1人選択
+    
+    Args:
+        client: OpenAI client
+        modulator: Modulatorインスタンス
+        agents: エージェントのリスト
+        previous_speaker: 前の発言者（Agentオブジェクト）
+    
+    Returns:
+        選択されたAgentオブジェクト、またはNone
+    """
+    if not modulator.structured_memory:
+        return None
+    
+    # 最後の発言を取得
+    latest_action = modulator.structured_memory[-1]["action"]
+    source_agent_id = modulator.structured_memory[-1]["agent_id"]
+    
+    # 前の発言に対してrelevantなエージェントのIDを取得
+    relevant_agent_ids = await modulator.distribute_to_relevant_agents(
+        client, latest_action, source_agent_id
+    )
+    
+    if not relevant_agent_ids:
+        return None
+    
+    print(f"  -> Relevant agents: {relevant_agent_ids}")
+    
+    # relevantなエージェントの中からランダムに選択
+    relevant_agents = [a for a in agents if a.agent_id in relevant_agent_ids]
+    return random.choice(relevant_agents) if relevant_agents else None
 
 
 
@@ -139,13 +173,23 @@ async def process_group_scenario(client, group_config, max_turns=2):
     
     # Run multi-turn interaction
     # max_turns represents the number of conversation rounds (each round = user + assistant message)
+    previous_speaker = None
+    
     for turn in range(max_turns):
         print(f"\n--- Turn {turn + 1} ---")
         
-        # Each turn generates 2 messages: one user and one assistant
-        # Select 2 agents for this turn (cycling through available agents)
-        user_agent = agents[(turn * 2) % len(agents)]
-        assistant_agent = agents[(turn * 2 + 1) % len(agents)]
+        # Select user agent
+        if turn == 0:
+            # First turn: select random user agent
+            user_agent = random.choice(agents)
+        else:
+            # Subsequent turns: select from agents relevant to the previous message
+            relevant_agent = await select_relevant_agent(
+                client, modulator, agents, previous_speaker
+            )
+            user_agent = relevant_agent if relevant_agent else random.choice(
+                [a for a in agents if a != previous_speaker]
+            )
         
         # Generate user message
         observations = [
@@ -169,11 +213,15 @@ async def process_group_scenario(client, group_config, max_turns=2):
                 "agent_id": user_agent.agent_id
             })
             
-            # Determine which agents should receive this action
-            relevant_agents = await modulator.distribute_to_relevant_agents(
-                client, user_action, user_agent.agent_id
-            )
-            print(f"  -> Relevant to: {relevant_agents}")
+            previous_speaker = user_agent
+        
+        # Select assistant agent based on relevance to user's message
+        relevant_assistant = await select_relevant_agent(
+            client, modulator, agents, user_agent
+        )
+        assistant_agent = relevant_assistant if relevant_assistant else random.choice(
+            [a for a in agents if a != user_agent]
+        )
         
         # Generate assistant message
         observations = [
@@ -197,11 +245,7 @@ async def process_group_scenario(client, group_config, max_turns=2):
                 "agent_id": assistant_agent.agent_id
             })
             
-            # Determine which agents should receive this action
-            relevant_agents = await modulator.distribute_to_relevant_agents(
-                client, assistant_action, assistant_agent.agent_id
-            )
-            print(f"  -> Relevant to: {relevant_agents}")
+            previous_speaker = assistant_agent
     
     return {
         "group_id": group_id,
